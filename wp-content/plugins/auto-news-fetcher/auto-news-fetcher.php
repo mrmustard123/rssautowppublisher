@@ -41,6 +41,15 @@ function anf_register_menu() {
     );
 }
 
+add_action('init', function() {
+    register_post_type('auto_news', [
+        'public' => true,
+        'label'  => 'Noticias Automáticas',
+        'supports' => ['title', 'editor', 'thumbnail'],
+        'menu_icon' => 'dashicons-rss'
+    ]);
+});
+
 // --- Renderizar la página del plugin ---
 function anf_render_settings_page() {
     // Obtener configuraciones actuales
@@ -96,43 +105,97 @@ function anf_render_settings_page() {
 // --- Función para buscar artículos desde los feeds configurados ---
 function anf_fetch_and_save_articles() {
     $options = get_option('anf_settings', []);
-    $feeds = explode("\n", $options['feeds']);
+    $feeds = array_filter(array_map('trim', explode("\n", $options['feeds'] ?? '')));
     $include_keywords = array_filter(array_map('trim', explode(',', $options['include_keywords'] ?? '')));
     $exclude_keywords = array_filter(array_map('trim', explode(',', $options['exclude_keywords'] ?? '')));
 
+    if (empty($feeds)) {
+        error_log("[Auto News Fetcher] No hay feeds configurados.");
+        echo '<div class="notice notice-error"><p>Error: No hay feeds RSS configurados.</p></div>';
+        return;
+    }
+
+    require_once(ABSPATH . WPINC . '/feed.php'); // Cargar la librería de feeds de WP
+
+    $imported_count = 0;
+    $errors = [];
+
     foreach ($feeds as $feed_url) {
-        $feed_url = trim($feed_url);
-        if (empty($feed_url)) continue;
+        try {
+            $feed = fetch_feed($feed_url); // Usa el sistema de caché de WordPress
 
-        $rss = @simplexml_load_file($feed_url);
-        if (!$rss) continue;
+            if (is_wp_error($feed)) {
+                throw new Exception($feed->get_error_message());
+            }
 
-        foreach ($rss->channel->item as $item) {
-            $title = (string) $item->title;
-            $link = (string) $item->link;
-            $description = (string) $item->description;
-
-            // Curación por palabras clave
-            $content = $title . ' ' . $description;
-            $passes_include = empty($include_keywords) || preg_match('/\b(' . implode('|', $include_keywords) . ')\b/i', $content);
-            $passes_exclude = !preg_match('/\b(' . implode('|', $exclude_keywords) . ')\b/i', $content);
-
-            if ($passes_include && $passes_exclude) {
-                // Verificar si ya existe el post
-                if (!get_page_by_title($title, OBJECT, 'post')) {
-                    wp_insert_post([
-                        'post_title'   => $title,
-                        'post_content' => $description . "\n\nFuente: <a href=\"$link\">$link</a>",
-                        'post_status'  => 'draft',
-                        'post_type'    => 'post',
-                    ]);
+            $items = $feed->get_items(0, 10); // Primeros 10 artículos
+            foreach ($items as $item) {
+                if (anf_should_import_item($item, $include_keywords, $exclude_keywords)) {
+                    if (anf_save_news_item($item)) {
+                        $imported_count++;
+                    }
                 }
             }
+        } catch (Exception $e) {
+            $errors[] = "Feed: $feed_url - Error: " . $e->getMessage();
+            error_log("[Auto News Fetcher] " . $e->getMessage());
         }
     }
 
-    echo '<div class="updated"><p>Importación completada.</p></div>';
+    // Mostrar resultados
+    if (!empty($errors)) {
+        echo '<div class="notice notice-warning"><p>Ocurrieron errores: ' . implode('<br>', $errors) . '</p></div>';
+    }
+    echo '<div class="updated"><p>Importación completada. Artículos nuevos: ' . $imported_count . '</p></div>';
 }
+
+
+// --- Función para evaluar si un artículo debe importarse ---
+function anf_should_import_item($item, $include_keywords, $exclude_keywords) {
+    $title = $item->get_title();
+    $description = $item->get_description();
+    $content = $title . ' ' . $description;
+
+    // Filtro por palabras clave
+    $passes_include = empty($include_keywords) || preg_match('/\b(' . implode('|', $include_keywords) . ')\b/i', $content);
+    $passes_exclude = !preg_match('/\b(' . implode('|', $exclude_keywords) . ')\b/i', $content);
+
+    return $passes_include && $passes_exclude;
+}
+
+// --- Función para guardar un artículo como CPT ---
+function anf_save_news_item($item) {
+    $title = $item->get_title();
+    $guid = $item->get_id();
+
+    // Evitar duplicados por GUID o título
+    if (get_page_by_title($title, OBJECT, 'auto_news') || anf_post_exists_by_guid($guid)) {
+        return false;
+    }
+
+    $post_id = wp_insert_post([
+        'post_title'   => $title,
+        'post_content' => $item->get_description() . "\n\n<strong>Fuente:</strong> <a href=\"" . esc_url($item->get_permalink()) . "\">Enlace original</a>",
+        'post_status'  => 'draft', // Publicar como borrador para revisión
+        'post_type'    => 'auto_news',
+        'meta_input'   => [
+            'anf_guid' => $guid, // Guardar GUID para evitar duplicados
+            'anf_source' => $item->get_feed()->get_title()
+        ]
+    ]);
+
+    return !is_wp_error($post_id);
+}
+
+// --- Función auxiliar: verificar duplicados por GUID ---
+function anf_post_exists_by_guid($guid) {
+    global $wpdb;
+    return $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $wpdb->posts WHERE guid = %s OR ID IN (SELECT post_id FROM $wpdb->postmeta WHERE meta_key = 'anf_guid' AND meta_value = %s)",
+        $guid, $guid
+    )) > 0;
+}
+
 
 // --- Función para validar URLs de feeds (ahora con feedback) ---
 function anf_validate_feed_urls($urls, &$error_count) {

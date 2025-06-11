@@ -3,9 +3,9 @@
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
-            <file>file:/C:/2025/Leonardo/Documentos/applications_portfolio/rssatutowppublisher/05_research/02_prototypes/wp_simulation/wp-content/plugins/auto-news-fetcher/auto-news-fetcher.php</file>
-            <file>file:/C:/2025/Leonardo/Documentos/applications_portfolio/rssatutowppublisher/05_research/02_prototypes/wp_simulation/index.php</file>
-            <file>file:/C:/2025/Leonardo/Documentos/applications_portfolio/rssatutowppublisher/05_research/02_prototypes/wp_simulation/wp-config.php</file>
+            <file>file:/C:/2025/Leonardo/Documentos/applications_portfolio/rssautowppublisher/05_research/02_prototypes/wp_simulation/wp-content/plugins/auto-news-fetcher/phpunit.xml.dist</file>
+            <file>file:/C:/2025/Leonardo/Documentos/applications_portfolio/rssautowppublisher/05_research/02_prototypes/wp_simulation/wp-content/plugins/auto-news-fetcher/tests/bootstrap.php</file>
+            <file>file:/C:/2025/Leonardo/Documentos/applications_portfolio/rssautowppublisher/05_research/02_prototypes/wp_simulation/wp-content/plugins/auto-news-fetcher/tests/fetch-feed-test.php</file>
         </group>
     </open-files>
 </project-private>

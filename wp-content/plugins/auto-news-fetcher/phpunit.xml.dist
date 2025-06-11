@@ -1,0 +1,11 @@
+<phpunit bootstrap="./tests/bootstrap.php">
+    <testsuites>
+        <testsuite name="Auto News Fetcher">
+            <directory>./tests</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <const name="WP_TESTS_DIR" value="C:/wamp64/www/wp_simulation/tests/phpunit/"/>
+        <const name="WP_ROOT_DIR" value="C:/wamp64/www/wp_simulation/"/>
+    </php>
+</phpunit>
