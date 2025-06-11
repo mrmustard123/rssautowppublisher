@@ -133,12 +133,11 @@ function anf_fetch_and_save_articles() {
 
     echo '<div class="updated"><p>Importación completada.</p></div>';
 }
-
-// --- Función para validar URLs de feeds (ahora con feedback) ---
-function anf_validate_feed_urls($urls, &$error_count) {
+/*
+// --- Función para validar URLs de feeds ---
+function anf_validate_feed_urls($urls) {
     $valid_urls = [];
     $urls = explode("\n", $urls);
-    $error_count = 0;
 
     foreach ($urls as $url) {
         $url = trim($url);
@@ -147,20 +146,12 @@ function anf_validate_feed_urls($urls, &$error_count) {
         // Validar formato URL
         if (!filter_var($url, FILTER_VALIDATE_URL)) {
             error_log("[Auto News Fetcher] URL inválida: $url");
-            $error_count++;
             continue;
         }
 
-        // Test de conexión HTTP
-        if (!anf_test_feed_connection($url)) {
-            $error_count++;
-            continue;
-        }
-
-        // Verificar si es un feed RSS válido
+        // Opcional: Verificar si es un feed RSS válido (requiere extensión SimpleXML)
         if (!@simplexml_load_file($url)) {
             error_log("[Auto News Fetcher] No es un feed RSS válido: $url");
-            $error_count++;
             continue;
         }
 
@@ -169,7 +160,6 @@ function anf_validate_feed_urls($urls, &$error_count) {
 
     return implode("\n", $valid_urls);
 }
-
 
 // --- Función para sanitizar palabras clave ---
 function anf_sanitize_keywords($keywords) {
@@ -188,41 +178,17 @@ function anf_sanitize_keywords($keywords) {
     return implode(',', array_filter($clean_keywords));
 }
 
-
-// --- Función para testear conexión a feeds ---
-function anf_test_feed_connection($url) {
-    $response = wp_remote_get($url, [
-        'timeout' => 10, // 10 segundos de timeout
-        'sslverify' => false // Opcional: desactiva verificación SSL en localhost
-    ]);
-
-    if (is_wp_error($response)) {
-        error_log("[Auto News Fetcher] Error de conexión: " . $response->get_error_message() . " - URL: $url");
-        return false;
-    }
-
-    $http_code = wp_remote_retrieve_response_code($response);
-    if ($http_code != 200) {
-        error_log("[Auto News Fetcher] HTTP Code $http_code - URL: $url");
-        return false;
-    }
-
-    return true;
-}
-
-// --- Guardado de configuraciones ---
+// --- Actualizar el guardado de configuraciones ---
 if (isset($_POST['anf_save_settings'])) {
-    $error_count = 0;
-    $options['feeds'] = anf_validate_feed_urls($_POST['anf_feeds'], $error_count);
+    $options['feeds'] = anf_validate_feed_urls($_POST['anf_feeds']);
     $options['include_keywords'] = anf_sanitize_keywords($_POST['anf_include_keywords']);
     $options['exclude_keywords'] = anf_sanitize_keywords($_POST['anf_exclude_keywords']);
-
-    if ($error_count > 0) {
-        echo '<div class="notice notice-warning"><p>Se guardó la configuración, pero se omitieron ' 
-             . $error_count . ' URLs inválidas. Verifica el debug.log para detalles.</p></div>';
-    } else {
+    
+    if (update_option('anf_settings', $options)) {
         echo '<div class="updated"><p>Configuración guardada correctamente.</p></div>';
+    } else {
+        error_log("[Auto News Fetcher] Error al guardar opciones en la base de datos");
+        echo '<div class="error"><p>Error al guardar. Verifica los datos.</p></div>';
     }
-
-    update_option('anf_settings', $options);
 }
+*/
