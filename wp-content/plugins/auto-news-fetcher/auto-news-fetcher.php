@@ -26,8 +26,32 @@ function anf_initialize_plugin() {
 */
 
 
+// Registrar CPT con más opciones
+add_action('init', function() {
+    register_post_type('auto_news', [
+        'public' => true,
+        'label'  => 'Noticias Automáticas',
+        'labels' => [
+            'name'          => 'Noticias Automáticas',
+            'singular_name' => 'Noticia Automática',
+            'add_new_item'  => 'Añadir Nueva Noticia'
+        ],
+        'menu_icon'   => 'dashicons-rss',
+        'supports'    => ['title', 'editor', 'thumbnail'],
+        'has_archive' => true, // Para poder crear página de archivo
+        'rewrite'     => ['slug' => 'noticias-automaticas']
+    ]);
+});
+
+// Flush rules al activar el plugin (solo una vez)
+register_activation_hook(__FILE__, function() {
+    flush_rewrite_rules();
+});
+
+
 // --- Registrar menú en el admin ---
 add_action('admin_menu', 'anf_register_menu');
+
 
 function anf_register_menu() {
     add_menu_page(
@@ -176,7 +200,7 @@ function anf_save_news_item($item) {
     $post_id = wp_insert_post([
         'post_title'   => $title,
         'post_content' => $item->get_description() . "\n\n<strong>Fuente:</strong> <a href=\"" . esc_url($item->get_permalink()) . "\">Enlace original</a>",
-        'post_status'  => 'draft', // Publicar como borrador para revisión
+        'post_status'  => 'publish', // Publicar como borrador para revisión
         'post_type'    => 'auto_news',
         'meta_input'   => [
             'anf_guid' => $guid, // Guardar GUID para evitar duplicados
@@ -289,3 +313,153 @@ if (isset($_POST['anf_save_settings'])) {
 
     update_option('anf_settings', $options);
 }
+
+
+/******PUNTO 5 ************/
+// Shortcode para mostrar noticias
+add_shortcode('mostrar_noticias_automaticas', function($atts) {
+    ob_start();
+    
+    $args = [
+        'post_type'      => 'auto_news',
+        'posts_per_page' => 5,
+        'post_status'    => 'publish'
+    ];
+    
+    $noticias = new WP_Query($args);
+    
+    if ($noticias->have_posts()) :
+        echo '<div class="noticias-automaticas">';
+        while ($noticias->have_posts()) : $noticias->the_post();
+            echo '<article>';
+            the_title('<h3>', '</h3>');
+            the_content();
+            $fuente = get_post_meta(get_the_ID(), 'anf_guid', true);
+            if ($fuente) {
+                echo '<a href="' . esc_url($fuente) . '" target="_blank">Ver fuente original</a>';
+            }
+            echo '</article>';
+        endwhile;
+        echo '</div>';
+    else :
+        echo '<p>No hay noticias disponibles.</p>';
+    endif;
+    
+    wp_reset_postdata();
+    return ob_get_clean();
+});
+
+/**********PUNTO 6************/
+
+// Registrar el evento cron al activar el plugin
+register_activation_hook(__FILE__, 'anf_activate_cron');
+function anf_activate_cron() {
+    if (!wp_next_scheduled('anf_daily_fetch')) {
+        wp_schedule_event(time(), 'daily', 'anf_daily_fetch');
+    }
+}
+
+// Eliminar el evento al desactivar el plugin
+register_deactivation_hook(__FILE__, 'anf_deactivate_cron');
+function anf_deactivate_cron() {
+    wp_clear_scheduled_hook('anf_daily_fetch');
+}
+
+// Hook para la acción cron
+add_action('anf_daily_fetch', 'anf_execute_auto_fetch');
+
+function anf_execute_auto_fetch() {
+    $options = get_option('anf_settings');
+    $errors = [];
+    $imported_count = 0;
+    
+    if (empty($options['feeds'])) {
+        $errors[] = "No hay feeds RSS configurados";
+        error_log("[Auto News Fetcher] " . end($errors));
+        anf_send_notification(0, $errors);
+        return;
+    }
+    
+    // Ejecutar importación (capturar resultados)
+    ob_start();
+    $imported_count = anf_fetch_and_save_articles();
+    $output = ob_get_clean();
+    
+    // Enviar email
+    anf_send_notification($imported_count, $errors);
+    
+    return $imported_count;
+}
+
+
+/***************PUNTO 6.3.********************************************/
+
+// Función para enviar el email
+function anf_send_notification($imported_count, $errors = []) {
+    $to = get_option('admin_email'); // Email del admin de WordPress
+    $subject = 'Resumen de importación automática de noticias';
+    
+    $message = "
+        <h1>Resumen de importación automática</h1>
+        <p><strong>Fecha:</strong> " . current_time('mysql') . "</p>
+        <p><strong>Noticias importadas:</strong> " . $imported_count . "</p>
+    ";
+    
+    if (!empty($errors)) {
+        $message .= "<h2>Errores:</h2><ul>";
+        foreach ($errors as $error) {
+            $message .= "<li>" . esc_html($error) . "</li>";
+        }
+        $message .= "</ul>";
+    }
+    
+    $headers = [
+        'Content-Type: text/html; charset=UTF-8',
+        'From: Auto News Fetcher <noreply@' . $_SERVER['HTTP_HOST'] . '>'
+    ];
+    
+    wp_mail($to, $subject, $message, $headers);
+}
+/*
+// Modificar la función de fetch automático para incluir notificación
+function anf_execute_auto_fetch() {
+    $options = get_option('anf_settings');
+    $errors = [];
+    $imported_count = 0;
+    
+    if (empty($options['feeds'])) {
+        $errors[] = "No hay feeds RSS configurados";
+        error_log("[Auto News Fetcher] " . end($errors));
+        anf_send_notification(0, $errors);
+        return;
+    }
+    
+    // Ejecutar importación (capturar resultados)
+    ob_start();
+    $imported_count = anf_fetch_and_save_articles();
+    $output = ob_get_clean();
+    
+    // Enviar email
+    anf_send_notification($imported_count, $errors);
+    
+    return $imported_count;
+}
+
+// Actualizar la función original para que retorne el conteo
+function anf_fetch_and_save_articles() {
+    $options = get_option('anf_settings', []);
+    $feeds = array_filter(array_map('trim', explode("\n", $options['feeds'] ?? '')));
+    $imported_count = 0;
+    
+    foreach ($feeds as $feed_url) {
+        // ... (código existente)
+        if (anf_save_news_item($item)) {
+            $imported_count++; //  Contar posts importados
+        }
+    }
+    
+    return $imported_count; // Retornar el total
+}
+
+*/
+/*************************************************************************************/

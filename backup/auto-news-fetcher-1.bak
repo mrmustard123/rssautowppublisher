@@ -131,6 +131,28 @@ function anf_fetch_articles() {
 add_action('admin_menu', 'anf_add_admin_menu');
 add_action('admin_init', 'anf_settings_init');
 
+// Registrar CPT con más opciones
+add_action('init', function() {
+    register_post_type('auto_news', [
+        'public' => true,
+        'label'  => 'Noticias Automáticas',
+        'labels' => [
+            'name'          => 'Noticias Automáticas',
+            'singular_name' => 'Noticia Automática',
+            'add_new_item'  => 'Añadir Nueva Noticia'
+        ],
+        'menu_icon'   => 'dashicons-rss',
+        'supports'    => ['title', 'editor', 'thumbnail'],
+        'has_archive' => true, // Para poder crear página de archivo
+        'rewrite'     => ['slug' => 'noticias-automaticas']
+    ]);
+});
+
+// Flush rules al activar el plugin (solo una vez)
+register_activation_hook(__FILE__, function() {
+    flush_rewrite_rules();
+});
+
 function anf_settings_init() {
 
     register_setting('anf_settings', 'anf_rss_feeds');
@@ -216,3 +238,36 @@ function anf_admin_page() {
     <?php
 }
 
+/******PUNTO 5 ************/
+// Shortcode para mostrar noticias
+add_shortcode('mostrar_noticias_automaticas', function($atts) {
+    ob_start();
+    
+    $args = [
+        'post_type'      => 'auto_news',
+        'posts_per_page' => 5,
+        'post_status'    => 'publish'
+    ];
+    
+    $noticias = new WP_Query($args);
+    
+    if ($noticias->have_posts()) :
+        echo '<div class="noticias-automaticas">';
+        while ($noticias->have_posts()) : $noticias->the_post();
+            echo '<article>';
+            the_title('<h3>', '</h3>');
+            the_content();
+            $fuente = get_post_meta(get_the_ID(), 'anf_guid', true);
+            if ($fuente) {
+                echo '<a href="' . esc_url($fuente) . '" target="_blank">Ver fuente original</a>';
+            }
+            echo '</article>';
+        endwhile;
+        echo '</div>';
+    else :
+        echo '<p>No hay noticias disponibles.</p>';
+    endif;
+    
+    wp_reset_postdata();
+    return ob_get_clean();
+});
