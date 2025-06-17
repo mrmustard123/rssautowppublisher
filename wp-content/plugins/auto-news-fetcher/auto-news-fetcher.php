@@ -225,25 +225,119 @@ function anf_should_import_item($item, $include_keywords, $exclude_keywords) {
 function anf_save_news_item($item) {
     $title = $item->get_title();
     $guid = $item->get_id();
+    $description = $item->get_description();
+    $permalink = $item->get_permalink();
 
-    // Evitar duplicados por GUID o título
-    if (get_page_by_title($title, OBJECT, 'auto_news') || anf_post_exists_by_guid($guid)) {
+    // Evitar duplicados
+    /*if (get_page_by_title($title, OBJECT, 'auto_news') || anf_post_exists_by_guid($guid)) {*/
+    
+    $existing_post = new WP_Query([
+    'post_type' => 'auto_news',
+    'title' => $title,
+    'posts_per_page' => 1
+    ]);
+
+    if ($existing_post->have_posts() || anf_post_exists_by_guid($guid)) {
+        $query = new WP_Query([
+            'post_type' => 'auto_news',
+            'meta_query' => [
+                [
+                    'key' => 'anf_guid',
+                    'value' => $guid
+                ]
+            ],
+            'posts_per_page' => 1,
+            'fields' => 'ids'
+        ]);
+    
+    return $query->have_posts();        
+        //return false;
+    }
+
+    // 1. Extraer imagen del contenido (si existe)
+    $image_url = '';
+    /*
+    if ($item->get_enclosure() && $item->get_enclosure()->get_thumbnail()) {
+        $image_url = $item->get_enclosure()->get_thumbnail();
+    } else {
+        // Alternativa: Buscar imagen en el contenido HTML
+        preg_match('/<img.+src=[\'"]([^\'"]+)[\'"].*>/i', $description, $matches);
+        $image_url = $matches[1] ?? '';
+    }
+     */
+    // Alternativa para feeds con media:content
+    if ($item->get_enclosure() && $item->get_enclosure()->link) {
+        $image_url = $item->get_enclosure()->link;
+    } else {
+        // Alternativa: Buscar imagen en el contenido HTML
+        preg_match('/<img.+src=[\'"]([^\'"]+)[\'"].*>/i', $description, $matches);
+        $image_url = $matches[1] ?? '';
+    }    
+
+    // 2. Crear array de datos del post
+    $post_data = [
+        'post_title'   => $title,
+        'post_content' => $description . "\n\n<strong>Fuente:</strong> <a href=\"" . esc_url($permalink) . "\">Enlace original</a>",
+        'post_status'  => 'publish',
+        'post_type'    => 'auto_news',
+        'meta_input'   => [
+            'anf_guid' => $guid,
+            'anf_source' => $item->get_feed()->get_title(),
+            'anf_image_url' => $image_url // Guardamos la URL temporalmente
+        ]
+    ];
+
+    $post_id = wp_insert_post($post_data);
+
+    // 3. Si hay imagen, descargarla y asignarla como featured
+    if ($image_url && $post_id && !is_wp_error($post_id)) {
+        anf_import_remote_image($image_url, $post_id);
+    }
+
+    return $post_id;
+}
+
+
+function anf_import_remote_image($image_url, $post_id) {
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    require_once(ABSPATH . 'wp-admin/includes/file.php');
+    require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+    // 1. Descargar imagen temporalmente
+    $tmp = download_url($image_url);
+    
+    if (is_wp_error($tmp)) {
+        error_log("[Auto News Fetcher] Error al descargar imagen: " . $tmp->get_error_message());
         return false;
     }
 
-    $post_id = wp_insert_post([
-        'post_title'   => $title,
-        'post_content' => $item->get_description() . "\n\n<strong>Fuente:</strong> <a href=\"" . esc_url($item->get_permalink()) . "\">Enlace original</a>",
-        'post_status'  => 'publish', // Publicar como borrador para revisión
-        'post_type'    => 'auto_news',
-        'meta_input'   => [
-            'anf_guid' => $guid, // Guardar GUID para evitar duplicados
-            'anf_source' => $item->get_feed()->get_title()
-        ]
-    ]);
+    // 2. Preparar datos del archivo
+    $file_array = [
+        'name' => basename($image_url),
+        'tmp_name' => $tmp
+    ];
 
-    return !is_wp_error($post_id);
+    // 3. Subir a la biblioteca de medios
+    $attachment_id = media_handle_sideload($file_array, $post_id);
+
+    if (is_wp_error($attachment_id)) {
+        @unlink($tmp);
+        error_log("[Auto News Fetcher] Error al subir imagen: " . $attachment_id->get_error_message());
+        return false;
+    }
+
+    // 4. Asignar como imagen destacada
+    set_post_thumbnail($post_id, $attachment_id);
+    
+    // 5. Limpiar URL temporal del meta
+    delete_post_meta($post_id, 'anf_image_url');
+    
+    return $attachment_id;
 }
+
+
+
+
 
 // --- Función auxiliar: verificar duplicados por GUID ---
 function anf_post_exists_by_guid($guid) {
@@ -454,7 +548,7 @@ function anf_send_notification($imported_count, $errors = []) {
     
     wp_mail($to, $subject, $message, $headers);
 }
-/*
+/*********ESTA FUNCION DE NOTIFICACIONES NO LA VAMOS A IMPLEMENTAR TODAVIA*********
 // Modificar la función de fetch automático para incluir notificación
 function anf_execute_auto_fetch() {
     $options = get_option('anf_settings');
@@ -495,5 +589,4 @@ function anf_fetch_and_save_articles() {
     return $imported_count; // Retornar el total
 }
 
-*/
-/*************************************************************************************/
+*************************************************************************************/

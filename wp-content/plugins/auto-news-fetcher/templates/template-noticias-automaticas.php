@@ -36,6 +36,12 @@ $noticias = new WP_Query($args);
         <div class="noticias-list">
             <?php while ($noticias->have_posts()) : $noticias->the_post(); ?>
                 <article class="noticia-item">
+                    <?php if (has_post_thumbnail()) : ?>
+                        <div class="noticia-imagen">
+                            <?php the_post_thumbnail('medium'); ?>
+                        </div>
+                    <?php endif; ?>
+
                     <h2><?php the_title(); ?></h2>
                     <div class="noticia-content">
                         <?php the_content(); ?>

@@ -16,3 +16,11 @@
     color: #2271b1;
 }
 
+
+.noticia-imagen {
+    margin-bottom: 15px;
+}
+.noticia-imagen img {
+    max-width: 100%;
+    height: auto;
+}
