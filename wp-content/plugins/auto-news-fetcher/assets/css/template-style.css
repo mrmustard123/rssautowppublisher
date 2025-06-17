@@ -1,0 +1,18 @@
+/* 
+    Created on : 16 jun. de 2025, 21:47:34
+    Author     : Leonardo Tellez
+*/
+.anf-search-form {
+    margin: 20px 0;
+}
+.noticia-item {
+    border: 1px solid #eee;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.fuente-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: #2271b1;
+}
+

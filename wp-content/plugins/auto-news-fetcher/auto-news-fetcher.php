@@ -25,6 +25,40 @@ function anf_initialize_plugin() {
 }
 */
 
+// Registrar el template personalizado
+add_filter('theme_page_templates', function($templates) {
+    $templates['templates/template-noticias-automaticas.php'] = 'Plantilla Noticias Automáticas';
+    return $templates;
+});
+/*
+// Cargar el template desde el plugin
+add_filter('template_include', function($template) {
+    global $post;
+    
+    if (is_page() && 
+        get_page_template_slug($post->ID) === 'templates/template-noticias-automaticas.php' && 
+        file_exists(plugin_dir_path(__FILE__) . 'templates/template-noticias-automaticas.php'))
+    {
+        return plugin_dir_path(__FILE__) . 'templates/template-noticias-automaticas.php';
+    }
+    
+    return $template;
+});
+*/
+
+// Cargar template
+add_filter('template_include', function($template) {
+    if (is_page() && get_page_template_slug() === 'templates/template-noticias-automaticas.php') {
+        $new_template = plugin_dir_path(__FILE__) . 'templates/template-noticias-automaticas.php';
+        if (file_exists($new_template)) {
+            return $new_template;
+        }
+    }
+    return $template;
+});
+
+
+
 
 // Registrar CPT con más opciones
 add_action('init', function() {
@@ -64,7 +98,7 @@ function anf_register_menu() {
         25
     );
 }
-
+/*
 add_action('init', function() {
     register_post_type('auto_news', [
         'public' => true,
@@ -73,7 +107,7 @@ add_action('init', function() {
         'menu_icon' => 'dashicons-rss'
     ]);
 });
-
+*/
 // --- Renderizar la página del plugin ---
 function anf_render_settings_page() {
     // Obtener configuraciones actuales

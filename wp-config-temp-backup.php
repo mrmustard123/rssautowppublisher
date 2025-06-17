@@ -48,14 +48,14 @@ define( 'DB_COLLATE', '' );
  *
  * @since 2.6.0
  */
-define('AUTH_KEY',         '4:v:n YXK}(uaym_x#mh.DI6cQM&}F-_n=|l<sxIu8Wa7!L ;XmL*NF%L]Gq}Sq|');
-define('SECURE_AUTH_KEY',  ';5|10gzEX@2{lv3)H^N^)?rj1d8lic_z!58nL$RHuC2KJe1+e8*^`(maA:z[$Nz0');
-define('LOGGED_IN_KEY',    '=prhj!;-`CZTjS@-?$2!f;@Qk;R]Z&oS}fe/}x `l4S,v,~ )R7BVO&^Vd5A;XrA');
-define('NONCE_KEY',        'xg`S2V<;f0F:.i<T+2,B:jLaLb&XN3I){3):$Le0}741 8U(}A(}1sOg;FKVh4[T');
-define('AUTH_SALT',        '&>9}r3/fk?pd@Gpm{q6$TV<|.W)w?i>?Kut+~-+:=DIoLBJ0%_rk?H;TL|l-s}l*');
-define('SECURE_AUTH_SALT', '5 ^v~}UuMsK:dLqwF~A=Sz.T(q jVZ)O+F{OB*.qh:udA.^M45DzFM^LIfp8{&`+');
-define('LOGGED_IN_SALT',   'Kw6+1ielw`h;>q0lcy]pEt@}Xl|:abccqr-3aF]pDUYW})Anv~ff,rHA~oPKK+-x');
-define('NONCE_SALT',       '%Fga*0^/.Qg>TIk9ZEE7|@R1NugV JWt=y-tSc+F~c1yk}Ic.7Jgjtpw+&#~`<z^');
+define( 'AUTH_KEY',         'put your unique phrase here' );
+define( 'SECURE_AUTH_KEY',  'put your unique phrase here' );
+define( 'LOGGED_IN_KEY',    'put your unique phrase here' );
+define( 'NONCE_KEY',        'put your unique phrase here' );
+define( 'AUTH_SALT',        'put your unique phrase here' );
+define( 'SECURE_AUTH_SALT', 'put your unique phrase here' );
+define( 'LOGGED_IN_SALT',   'put your unique phrase here' );
+define( 'NONCE_SALT',       'put your unique phrase here' );
 
 /**#@-*/
 
@@ -85,8 +85,12 @@ $table_prefix = 'wp_';
  *
  * @link https://developer.wordpress.org/advanced-administration/debug/debug-wordpress/
  */
-define( 'WP_DEBUG', true );
-
+/*define( 'WP_DEBUG', false );*/
+// Modo debug para desarrollo
+define( 'WP_DEBUG', true ); // Activa el modo debug
+define( 'WP_DEBUG_LOG', true ); // Guarda errores en wp-content/debug.log
+define( 'WP_DEBUG_DISPLAY', false ); // Evita mostrar errores en pantalla (opcional, recomendado para no asustar a los clientes)
+@ini_set( 'display_errors', 0 ); // Complementa WP_DEBUG_DISPLAY
 /* Add any custom values between this line and the "stop editing" line. */
 
 
