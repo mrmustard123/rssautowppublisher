@@ -254,21 +254,10 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 		$files   = $request->get_file_params();
 		$headers = $request->get_headers();
 
-		$time = null;
-
-		// Matches logic in media_handle_upload().
-		if ( ! empty( $request['post'] ) ) {
-			$post = get_post( $request['post'] );
-			// The post date doesn't usually matter for pages, so don't backdate this upload.
-			if ( $post && 'page' !== $post->post_type && substr( $post->post_date, 0, 4 ) > 0 ) {
-				$time = $post->post_date;
-			}
-		}
-
 		if ( ! empty( $files ) ) {
-			$file = $this->upload_from_file( $files, $headers, $time );
+			$file = $this->upload_from_file( $files, $headers );
 		} else {
-			$file = $this->upload_from_data( $request->get_body(), $headers, $time );
+			$file = $this->upload_from_data( $request->get_body(), $headers );
 		}
 
 		if ( is_wp_error( $file ) ) {
@@ -304,17 +293,6 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 		$attachment->post_mime_type = $type;
 		$attachment->guid           = $url;
 
-		// If the title was not set, use the original filename.
-		if ( empty( $attachment->post_title ) && ! empty( $files['file']['name'] ) ) {
-			// Remove the file extension (after the last `.`)
-			$tmp_title = substr( $files['file']['name'], 0, strrpos( $files['file']['name'], '.' ) );
-
-			if ( ! empty( $tmp_title ) ) {
-				$attachment->post_title = $tmp_title;
-			}
-		}
-
-		// Fall back to the original approach.
 		if ( empty( $attachment->post_title ) ) {
 			$attachment->post_title = preg_replace( '/\.[^.]+$/', '', wp_basename( $file ) );
 		}
@@ -339,7 +317,8 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 		 *
 		 * @since 4.7.0
 		 *
-		 * @param WP_Post         $attachment Inserted or updated attachment object.
+		 * @param WP_Post         $attachment Inserted or updated attachment
+		 *                                    object.
 		 * @param WP_REST_Request $request    The request sent to the API.
 		 * @param bool            $creating   True when creating an attachment, false when updating.
 		 */
@@ -449,7 +428,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 	}
 
 	/**
-	 * Performs post-processing on an attachment.
+	 * Performs post processing on an attachment.
 	 *
 	 * @since 5.3.0
 	 *
@@ -470,7 +449,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 	}
 
 	/**
-	 * Checks if a given request can perform post-processing on an attachment.
+	 * Checks if a given request can perform post processing on an attachment.
 	 *
 	 * @since 5.3.0
 	 *
@@ -530,7 +509,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 			);
 		}
 
-		$supported_types = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/heic' );
+		$supported_types = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
 		$mime_type       = get_post_mime_type( $attachment_id );
 		if ( ! in_array( $mime_type, $supported_types, true ) ) {
 			return new WP_Error(
@@ -600,7 +579,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 			$args = $modifier['args'];
 			switch ( $modifier['type'] ) {
 				case 'rotate':
-					// Rotation direction: clockwise vs. counterclockwise.
+					// Rotation direction: clockwise vs. counter clockwise.
 					$rotate = 0 - $args['angle'];
 
 					if ( 0 !== $rotate ) {
@@ -620,12 +599,12 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 				case 'crop':
 					$size = $image_editor->get_size();
 
-					$crop_x = (int) round( ( $size['width'] * $args['left'] ) / 100.0 );
-					$crop_y = (int) round( ( $size['height'] * $args['top'] ) / 100.0 );
-					$width  = (int) round( ( $size['width'] * $args['width'] ) / 100.0 );
-					$height = (int) round( ( $size['height'] * $args['height'] ) / 100.0 );
+					$crop_x = round( ( $size['width'] * $args['left'] ) / 100.0 );
+					$crop_y = round( ( $size['height'] * $args['top'] ) / 100.0 );
+					$width  = round( ( $size['width'] * $args['width'] ) / 100.0 );
+					$height = round( ( $size['height'] * $args['height'] ) / 100.0 );
 
-					if ( $size['width'] !== $width || $size['height'] !== $height ) {
+					if ( $size['width'] !== $width && $size['height'] !== $height ) {
 						$result = $image_editor->crop( $crop_x, $crop_y, $width, $height );
 
 						if ( is_wp_error( $result ) ) {
@@ -660,7 +639,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 
 		$filename = "{$image_name}.{$image_ext}";
 
-		// Create the uploads subdirectory if needed.
+		// Create the uploads sub-directory if needed.
 		$uploads = wp_upload_dir();
 
 		// Make the file name unique in the (new) upload directory.
@@ -1056,14 +1035,12 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 	 * Handles an upload via raw POST data.
 	 *
 	 * @since 4.7.0
-	 * @since 6.6.0 Added the `$time` parameter.
 	 *
-	 * @param string      $data    Supplied file data.
-	 * @param array       $headers HTTP headers from the request.
-	 * @param string|null $time    Optional. Time formatted in 'yyyy/mm'. Default null.
+	 * @param string $data    Supplied file data.
+	 * @param array  $headers HTTP headers from the request.
 	 * @return array|WP_Error Data from wp_handle_sideload().
 	 */
-	protected function upload_from_data( $data, $headers, $time = null ) {
+	protected function upload_from_data( $data, $headers ) {
 		if ( empty( $data ) ) {
 			return new WP_Error(
 				'rest_upload_no_data',
@@ -1151,7 +1128,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 			'test_form' => false,
 		);
 
-		$sideloaded = wp_handle_sideload( $file_data, $overrides, $time );
+		$sideloaded = wp_handle_sideload( $file_data, $overrides );
 
 		if ( isset( $sideloaded['error'] ) ) {
 			@unlink( $tmpfname );
@@ -1206,7 +1183,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 				continue;
 			}
 
-			list( , $attr_parts ) = explode( ';', $value, 2 );
+			list( $type, $attr_parts ) = explode( ';', $value, 2 );
 
 			$attr_parts = explode( ';', $attr_parts );
 			$attributes = array();
@@ -1269,14 +1246,12 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 	 * Handles an upload via multipart/form-data ($_FILES).
 	 *
 	 * @since 4.7.0
-	 * @since 6.6.0 Added the `$time` parameter.
 	 *
-	 * @param array       $files   Data from the `$_FILES` superglobal.
-	 * @param array       $headers HTTP headers from the request.
-	 * @param string|null $time    Optional. Time formatted in 'yyyy/mm'. Default null.
+	 * @param array $files   Data from the `$_FILES` superglobal.
+	 * @param array $headers HTTP headers from the request.
 	 * @return array|WP_Error Data from wp_handle_upload().
 	 */
-	protected function upload_from_file( $files, $headers, $time = null ) {
+	protected function upload_from_file( $files, $headers ) {
 		if ( empty( $files ) ) {
 			return new WP_Error(
 				'rest_upload_no_data',
@@ -1318,7 +1293,7 @@ class WP_REST_Attachments_Controller extends WP_REST_Posts_Controller {
 		// Include filesystem functions to get access to wp_handle_upload().
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 
-		$file = wp_handle_upload( $files['file'], $overrides, $time );
+		$file = wp_handle_upload( $files['file'], $overrides );
 
 		if ( isset( $file['error'] ) ) {
 			return new WP_Error(

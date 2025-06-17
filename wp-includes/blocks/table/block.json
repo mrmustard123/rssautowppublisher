@@ -9,7 +9,7 @@
 	"attributes": {
 		"hasFixedLayout": {
 			"type": "boolean",
-			"default": true
+			"default": false
 		},
 		"caption": {
 			"type": "rich-text",

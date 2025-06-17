@@ -222,59 +222,28 @@ function anf_should_import_item($item, $include_keywords, $exclude_keywords) {
 }
 
 // --- Función para guardar un artículo como CPT ---
+// Función actualizada para guardar artículo con mejor manejo de imágenes
 function anf_save_news_item($item) {
     $title = $item->get_title();
     $guid = $item->get_id();
     $description = $item->get_description();
     $permalink = $item->get_permalink();
 
-    // Evitar duplicados
-    /*if (get_page_by_title($title, OBJECT, 'auto_news') || anf_post_exists_by_guid($guid)) {*/
-    
+    // Verificar duplicados (tu código existente)
     $existing_post = new WP_Query([
-    'post_type' => 'auto_news',
-    'title' => $title,
-    'posts_per_page' => 1
+        'post_type' => 'auto_news',
+        'title' => $title,
+        'posts_per_page' => 1
     ]);
 
     if ($existing_post->have_posts() || anf_post_exists_by_guid($guid)) {
-        $query = new WP_Query([
-            'post_type' => 'auto_news',
-            'meta_query' => [
-                [
-                    'key' => 'anf_guid',
-                    'value' => $guid
-                ]
-            ],
-            'posts_per_page' => 1,
-            'fields' => 'ids'
-        ]);
+        return false;
+    }
+
+    // Extraer imagen usando la función mejorada
+    $image_url = anf_extract_image_from_item($item);
     
-    return $query->have_posts();        
-        //return false;
-    }
-
-    // 1. Extraer imagen del contenido (si existe)
-    $image_url = '';
-    /*
-    if ($item->get_enclosure() && $item->get_enclosure()->get_thumbnail()) {
-        $image_url = $item->get_enclosure()->get_thumbnail();
-    } else {
-        // Alternativa: Buscar imagen en el contenido HTML
-        preg_match('/<img.+src=[\'"]([^\'"]+)[\'"].*>/i', $description, $matches);
-        $image_url = $matches[1] ?? '';
-    }
-     */
-    // Alternativa para feeds con media:content
-    if ($item->get_enclosure() && $item->get_enclosure()->link) {
-        $image_url = $item->get_enclosure()->link;
-    } else {
-        // Alternativa: Buscar imagen en el contenido HTML
-        preg_match('/<img.+src=[\'"]([^\'"]+)[\'"].*>/i', $description, $matches);
-        $image_url = $matches[1] ?? '';
-    }    
-
-    // 2. Crear array de datos del post
+    // Crear el post
     $post_data = [
         'post_title'   => $title,
         'post_content' => $description . "\n\n<strong>Fuente:</strong> <a href=\"" . esc_url($permalink) . "\">Enlace original</a>",
@@ -283,59 +252,199 @@ function anf_save_news_item($item) {
         'meta_input'   => [
             'anf_guid' => $guid,
             'anf_source' => $item->get_feed()->get_title(),
-            'anf_image_url' => $image_url // Guardamos la URL temporalmente
+            'anf_original_url' => $permalink
         ]
     ];
 
     $post_id = wp_insert_post($post_data);
 
-    // 3. Si hay imagen, descargarla y asignarla como featured
+    // Intentar importar imagen si existe
     if ($image_url && $post_id && !is_wp_error($post_id)) {
-        anf_import_remote_image($image_url, $post_id);
+        $attachment_id = anf_import_remote_image($image_url, $post_id);
+        if ($attachment_id) {
+            error_log("[Auto News Fetcher] Imagen asignada correctamente al post $post_id");
+        } else {
+            error_log("[Auto News Fetcher] No se pudo asignar imagen al post $post_id - URL: $image_url");
+        }
+    } else {
+        error_log("[Auto News Fetcher] No se encontró imagen para el post: $title");
     }
 
     return $post_id;
 }
 
+// Función de debug para testear extracción de imágenes
+function anf_debug_feed_images($feed_url) {
+    require_once(ABSPATH . WPINC . '/feed.php');
+    
+    $feed = fetch_feed($feed_url);
+    if (is_wp_error($feed)) {
+        return "Error: " . $feed->get_error_message();
+    }
+    
+    $items = $feed->get_items(0, 5);
+    $debug_info = [];
+    
+    foreach ($items as $index => $item) {
+        $image_url = anf_extract_image_from_item($item);
+        $debug_info[] = [
+            'title' => $item->get_title(),
+            'image_url' => $image_url,
+            'description_preview' => substr(strip_tags($item->get_description()), 0, 100) . '...'
+        ];
+    }
+    
+    return $debug_info;
+}
 
+
+// Función mejorada para importar imagen remota
 function anf_import_remote_image($image_url, $post_id) {
+    if (empty($image_url) || !$post_id) {
+        return false;
+    }
+    
     require_once(ABSPATH . 'wp-admin/includes/image.php');
     require_once(ABSPATH . 'wp-admin/includes/file.php');
     require_once(ABSPATH . 'wp-admin/includes/media.php');
-
-    // 1. Descargar imagen temporalmente
-    $tmp = download_url($image_url);
+    
+    // Validar que la URL sea una imagen
+    $allowed_types = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    $extension = strtolower(pathinfo(parse_url($image_url, PHP_URL_PATH), PATHINFO_EXTENSION));
+    
+    if (!in_array($extension, $allowed_types)) {
+        error_log("[Auto News Fetcher] Tipo de archivo no permitido: $extension para URL: $image_url");
+        return false;
+    }
+    
+    // Verificar que la URL responda antes de descargar
+    $response = wp_remote_head($image_url, [
+        'timeout' => 10,
+        'user-agent' => 'WordPress Auto News Fetcher'
+    ]);
+    
+    if (is_wp_error($response)) {
+        error_log("[Auto News Fetcher] Error al verificar imagen: " . $response->get_error_message());
+        return false;
+    }
+    
+    $content_type = wp_remote_retrieve_header($response, 'content-type');
+    if ($content_type && strpos($content_type, 'image/') !== 0) {
+        error_log("[Auto News Fetcher] Content-Type no es imagen: $content_type");
+        return false;
+    }
+    
+    // Descargar imagen
+    $tmp = download_url($image_url, 30); // 30 segundos timeout
     
     if (is_wp_error($tmp)) {
         error_log("[Auto News Fetcher] Error al descargar imagen: " . $tmp->get_error_message());
         return false;
     }
-
-    // 2. Preparar datos del archivo
+    
+    // Validar que el archivo descargado sea realmente una imagen
+    $image_info = @getimagesize($tmp);
+    if (!$image_info) {
+        @unlink($tmp);
+        error_log("[Auto News Fetcher] Archivo descargado no es una imagen válida");
+        return false;
+    }
+    
+    // Generar nombre único para evitar conflictos
+    $filename = 'auto-news-' . $post_id . '-' . time() . '.' . $extension;
+    
     $file_array = [
-        'name' => basename($image_url),
+        'name' => $filename,
         'tmp_name' => $tmp
     ];
-
-    // 3. Subir a la biblioteca de medios
+    
+    // Subir a biblioteca de medios
     $attachment_id = media_handle_sideload($file_array, $post_id);
-
+    
     if (is_wp_error($attachment_id)) {
         @unlink($tmp);
         error_log("[Auto News Fetcher] Error al subir imagen: " . $attachment_id->get_error_message());
         return false;
     }
-
-    // 4. Asignar como imagen destacada
+    
+    // Asignar como imagen destacada
     set_post_thumbnail($post_id, $attachment_id);
     
-    // 5. Limpiar URL temporal del meta
-    delete_post_meta($post_id, 'anf_image_url');
+    // Guardar URL original en meta para referencia
+    update_post_meta($post_id, 'anf_original_image_url', $image_url);
+    
+    error_log("[Auto News Fetcher] Imagen importada exitosamente: $image_url -> Attachment ID: $attachment_id");
     
     return $attachment_id;
 }
 
 
+function anf_extract_image_from_item($item) {
+    $image_url = '';
+    
+    // Método 1: Buscar en media:content o media:thumbnail
+    $raw_data = $item->get_item_tags('', 'description');
+    if ($raw_data && isset($raw_data[0]['data'])) {
+        $content = $raw_data[0]['data'];
+        
+        // Buscar media:content
+        if (preg_match('/media:content[^>]+url=[\'"]([^\'"]+)[\'"]/', $content, $matches)) {
+            $image_url = $matches[1];
+        }
+        // Buscar media:thumbnail
+        elseif (preg_match('/media:thumbnail[^>]+url=[\'"]([^\'"]+)[\'"]/', $content, $matches)) {
+            $image_url = $matches[1];
+        }
+    }
+    
+    // Método 2: Enclosure tradicional
+    if (empty($image_url) && $item->get_enclosure()) {
+        $enclosure = $item->get_enclosure();
+        if ($enclosure->get_type() && strpos($enclosure->get_type(), 'image/') === 0) {
+            $image_url = $enclosure->get_link();
+        }
+    }
+    
+    // Método 3: Buscar primera imagen en el contenido HTML
+    if (empty($image_url)) {
+        $description = $item->get_description();
+        $content = $item->get_content();
+        $full_content = $description . ' ' . $content;
+        
+        // Regex más robusta para encontrar imágenes
+        if (preg_match('/<img[^>]+src=[\'"]([^\'"]+)[\'"][^>]*>/i', $full_content, $matches)) {
+            $image_url = $matches[1];
+        }
+    }
+    
+    // Método 4: Buscar en campos específicos del RSS
+    if (empty($image_url)) {
+        // Algunos feeds usan 'image' como campo
+        $image_field = $item->get_item_tags('', 'image');
+        if ($image_field && isset($image_field[0]['data'])) {
+            $image_url = $image_field[0]['data'];
+        }
+    }
+    
+    // Limpiar y validar URL
+    if (!empty($image_url)) {
+        $image_url = trim($image_url);
+        // Convertir URLs relativas a absolutas si es necesario
+        if (strpos($image_url, 'http') !== 0) {
+            $feed_url = $item->get_feed()->get_permalink();
+            $parsed_feed = parse_url($feed_url);
+            $base_url = $parsed_feed['scheme'] . '://' . $parsed_feed['host'];
+            $image_url = $base_url . '/' . ltrim($image_url, '/');
+        }
+        
+        // Validar que sea una URL válida
+        if (!filter_var($image_url, FILTER_VALIDATE_URL)) {
+            $image_url = '';
+        }
+    }
+    
+    return $image_url;
+}
 
 
 
@@ -590,3 +699,12 @@ function anf_fetch_and_save_articles() {
 }
 
 *************************************************************************************/
+/*
+// Agregar al final de tu archivo, temporalmente
+add_action('wp_ajax_test_feed_images', function() {
+    $feed_url = 'https://feeds.as.com/mrss-s/pages/as/site/as.com/section/futbol/subsection/primera/';
+    $debug = anf_debug_feed_images($feed_url);
+    wp_die('<pre>' . print_r($debug, true) . '</pre>');
+});
+ * 
+ */

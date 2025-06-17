@@ -5,7 +5,6 @@
  * Categories: featured
  * Keywords: Call to action
  * Block Types: core/buttons
- * Description: Left-aligned text with a CTA button and a separator.
  */
 ?>
 <!-- wp:columns {"align":"wide"} -->

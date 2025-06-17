@@ -19,7 +19,6 @@
 		}
 	},
 	"supports": {
-		"__experimentalOnEnter": true,
 		"align": [ "wide", "full" ],
 		"color": {
 			"gradients": true,

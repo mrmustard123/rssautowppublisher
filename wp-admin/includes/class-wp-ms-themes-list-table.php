@@ -99,9 +99,7 @@ class WP_MS_Themes_List_Table extends WP_List_Table {
 	public function prepare_items() {
 		global $status, $totals, $page, $orderby, $order, $s;
 
-		$orderby = ! empty( $_REQUEST['orderby'] ) ? sanitize_text_field( $_REQUEST['orderby'] ) : '';
-		$order   = ! empty( $_REQUEST['order'] ) ? sanitize_text_field( $_REQUEST['order'] ) : '';
-		$s       = ! empty( $_REQUEST['s'] ) ? sanitize_text_field( $_REQUEST['s'] ) : '';
+		wp_reset_vars( array( 'orderby', 'order', 's' ) );
 
 		$themes = array(
 			/**
@@ -494,9 +492,6 @@ class WP_MS_Themes_List_Table extends WP_List_Table {
 	}
 
 	/**
-	 * Generates the list table rows.
-	 *
-	 * @since 3.1.0
 	 */
 	public function display_rows() {
 		foreach ( $this->items as $theme ) {

@@ -22,7 +22,7 @@
 				<?php
 
 				/* translators: %s is the WordPress.com username */
-				printf( esc_html( __( 'You are connected as %s.', 'akismet' ) ), '<b>' . esc_html( $akismet_user->user_login ) . '</b>' );
+				echo sprintf( esc_html( __( 'You are connected as %s.', 'akismet' ) ), '<b>' . esc_html( $akismet_user->user_login ) . '</b>' );
 
 				?>
 				<br />
@@ -76,7 +76,7 @@
 				<?php
 
 				/* translators: %s is the WordPress.com username */
-				printf( esc_html( __( 'You are connected as %s.', 'akismet' ) ), '<b>' . esc_html( $akismet_user->user_login ) . '</b>' );
+				echo sprintf( esc_html( __( 'You are connected as %s.', 'akismet' ) ), '<b>' . esc_html( $akismet_user->user_login ) . '</b>' );
 
 				?>
 				<br />
