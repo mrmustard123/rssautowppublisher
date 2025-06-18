@@ -1,9 +1,2 @@
-﻿[18-Jun-2025 04:11:43 UTC] Xdebug: [Step Debug] Time-out connecting to debugging client, waited: 200 ms. Tried: localhost:9003 (through xdebug.client_host/xdebug.client_port) :-(
-[18-Jun-2025 04:13:32 UTC] Xdebug: [Step Debug] Time-out connecting to debugging client, waited: 200 ms. Tried: localhost:9003 (through xdebug.client_host/xdebug.client_port) :-(
-[18-Jun-2025 04:13:33 UTC] Xdebug: [Step Debug] Time-out connecting to debugging client, waited: 200 ms. Tried: localhost:9003 (through xdebug.client_host/xdebug.client_port) :-(
-[18-Jun-2025 04:13:33 UTC] [Auto News Fetcher - DEBUG] Procesando item: ICE detuvo a Brad Lander, contralor de Nueva York, por oponerse al arresto de un migrante
-[18-Jun-2025 04:13:33 UTC] [Auto News Fetcher - DEBUG] Contenido para regex (primeros 500 chars): <p>La entrada <a href="https://www.elnacional.com/video/ice-detuvo-a-brad-lander-contralor-de-nueva-york-por-oponerse-al-arresto-de-un-migrante/">ICE detuvo a Brad Lander, contralor de Nueva York, por oponerse al arresto de un migrante</a> se publicó primero en <a href="https://www.elnacional.com">EL NACIONAL</a>.</p>
-[18-Jun-2025 04:13:33 UTC] [Auto News Fetcher - DEBUG] No se encontró URL de imagen después de todos los métodos.
-[18-Jun-2025 04:13:34 UTC] [Auto News Fetcher] No se encontró imagen para el post: ICE detuvo a Brad Lander, contralor de Nueva York, por oponerse al arresto de un migrante
-[18-Jun-2025 04:16:56 UTC] Xdebug: [Step Debug] Time-out connecting to debugging client, waited: 200 ms. Tried: localhost:9003 (through xdebug.client_host/xdebug.client_port) :-(
-[18-Jun-2025 04:18:29 UTC] Xdebug: [Step Debug] Time-out connecting to debugging client, waited: 200 ms. Tried: localhost:9003 (through xdebug.client_host/xdebug.client_port) :-(
+﻿[18-Jun-2025 15:36:19 UTC] Xdebug: [Step Debug] Time-out connecting to debugging client, waited: 200 ms. Tried: localhost:9003 (through xdebug.client_host/xdebug.client_port) :-(
+[18-Jun-2025 15:36:19 UTC] Xdebug: [Step Debug] Time-out connecting to debugging client, waited: 200 ms. Tried: localhost:9003 (through xdebug.client_host/xdebug.client_port) :-(

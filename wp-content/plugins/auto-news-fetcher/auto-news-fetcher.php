@@ -30,7 +30,7 @@ add_filter('theme_page_templates', function($templates) {
     $templates['templates/template-noticias-automaticas.php'] = 'Plantilla Noticias Automáticas';
     return $templates;
 });
-/*
+/* Deshabilitamos este trozo de codigo por que esta muy complicado y no es escencial
 // Cargar el template desde el plugin
 add_filter('template_include', function($template) {
     global $post;
@@ -56,8 +56,6 @@ add_filter('template_include', function($template) {
     }
     return $template;
 });
-
-
 
 
 // Registrar CPT con más opciones
@@ -98,16 +96,8 @@ function anf_register_menu() {
         25
     );
 }
-/*
-add_action('init', function() {
-    register_post_type('auto_news', [
-        'public' => true,
-        'label'  => 'Noticias Automáticas',
-        'supports' => ['title', 'editor', 'thumbnail'],
-        'menu_icon' => 'dashicons-rss'
-    ]);
-});
-*/
+
+
 // --- Renderizar la página del plugin ---
 function anf_render_settings_page() {
     // Obtener configuraciones actuales
@@ -162,30 +152,32 @@ function anf_render_settings_page() {
 
 // --- Función para buscar artículos desde los feeds configurados ---
 function anf_fetch_and_save_articles() {
+    //Importante poner xdebug_break() para que funcione Xdebun en Wordpress:
     xdebug_break();
     $options = get_option('anf_settings', []);
-    /***COMENTADO TEMPORALMENTE*****
+    /*Comentar esta linea para pruebas:*/
     $feeds = array_filter(array_map('trim', explode("\n", $options['feeds'] ?? '')));
-    *****************************/
+   
     $include_keywords = array_filter(array_map('trim', explode(',', $options['include_keywords'] ?? '')));
     $exclude_keywords = array_filter(array_map('trim', explode(',', $options['exclude_keywords'] ?? '')));
 
-    /* COMENTADO TEMPORALMENTE
+    
     if (empty($feeds)) {
         error_log("[Auto News Fetcher] No hay feeds configurados.");
         echo '<div class="notice notice-error"><p>Error: No hay feeds RSS configurados.</p></div>';
         return;
     }     
-     */
-
-    require_once(ABSPATH . WPINC . '/feed.php'); // Cargar la librería de feeds de WP
+     
+    // Cargar la librería de feeds de WP:
+    require_once(ABSPATH . WPINC . '/feed.php'); 
 
     $imported_count = 0;
     $errors = [];
     
- // **** INICIO DEL CÓDIGO TEMPORAL PARA PRUEBAS ****
+ /**** INICIO DEL CÓDIGO TEMPORAL PARA PRUEBAS **** 
     // Comenta el bucle 'foreach ($feeds as $feed_url)' existente y añade este bloque
-    $feed_url_to_test = 'https://www.elnacional.com/feed/'; // <--- ¡AQUÍ ES DONDE ESPECIFICAS EL FEED!
+    //¡AQUÍ ES DONDE ESPECIFICAS EL FEED!:
+    $feed_url_to_test = 'https://ultimasnoticias.com.ve/feed/'; 
     $max_items_to_test = 1; // <--- Procesar solo el artículo más reciente para pruebas
 
     try {
@@ -207,19 +199,20 @@ function anf_fetch_and_save_articles() {
         $errors[] = "Feed: $feed_url_to_test - Error: " . $e->getMessage();
         error_log("[Auto News Fetcher] " . $e->getMessage());
     }
-    // **** FIN DEL CÓDIGO TEMPORAL PARA PRUEBAS ****    
-
-/*    
+    **** FIN DEL CÓDIGO TEMPORAL PARA PRUEBAS ****/  
+    
     
     foreach ($feeds as $feed_url) {
         try {
-            $feed = fetch_feed($feed_url); // Usa el sistema de caché de WordPress
+            // Usa el sistema de caché de WordPress:
+            $feed = fetch_feed($feed_url); 
 
             if (is_wp_error($feed)) {
                 throw new Exception($feed->get_error_message());
             }
 
-            $items = $feed->get_items(0, 10); // Primeros 10 artículos
+            // Primeros 10 artículos:
+            $items = $feed->get_items(0, 10); 
             foreach ($items as $item) {
                 if (anf_should_import_item($item, $include_keywords, $exclude_keywords)) {
                     if (anf_save_news_item($item)) {
@@ -232,8 +225,8 @@ function anf_fetch_and_save_articles() {
             error_log("[Auto News Fetcher] " . $e->getMessage());
         }
     }
-*/
-    // Mostrar resultados
+
+    // Mostrar resultados:
     if (!empty($errors)) {
         echo '<div class="notice notice-warning"><p>Ocurrieron errores: ' . implode('<br>', $errors) . '</p></div>';
     }
@@ -247,7 +240,7 @@ function anf_should_import_item($item, $include_keywords, $exclude_keywords) {
     $description = $item->get_description();
     $content = $title . ' ' . $description;
 
-    // Filtro por palabras clave
+    // Filtro por palabras clave:
     $passes_include = empty($include_keywords) || preg_match('/\b(' . implode('|', $include_keywords) . ')\b/i', $content);
     $passes_exclude = !preg_match('/\b(' . implode('|', $exclude_keywords) . ')\b/i', $content);
 
@@ -257,13 +250,14 @@ function anf_should_import_item($item, $include_keywords, $exclude_keywords) {
 // --- Función para guardar un artículo como CPT ---
 // Función actualizada para guardar artículo con mejor manejo de imágenes
 function anf_save_news_item($item) {
+    xdebug_break(); //THIS IS IMPORTANT FOR XDEBUG DEBUGGING INSIDE WORDPRESS!
     $title = $item->get_title();
     $guid = $item->get_id();
     $description = $item->get_description();
     $permalink = $item->get_permalink();
 
-/*****LO DESHABILITAMOS TEMPORALMENTE*****    
-    // Verificar duplicados (tu código existente)
+ 
+    // Verificar duplicados:
     $existing_post = new WP_Query([
         'post_type' => 'auto_news',
         'title' => $title,
@@ -273,9 +267,9 @@ function anf_save_news_item($item) {
     if ($existing_post->have_posts() || anf_post_exists_by_guid($guid)) {
         return false;
     }
-*********************************************************/
-    // Extraer imagen usando la función mejorada
-    xdebug_break();
+
+    // Extraer imagen usando la función mejorada:
+
     $image_url = anf_extract_image_from_item($item);
     
     // Crear el post
@@ -369,8 +363,9 @@ function anf_import_remote_image($image_url, $post_id) {
         return false;
     }
     
-    // Descargar imagen
-    $tmp = download_url($image_url, 30); // 30 segundos timeout
+    // Descargar imagen:
+    // 30 segundos timeout:
+    $tmp = download_url($image_url, 30); 
     
     if (is_wp_error($tmp)) {
         error_log("[Auto News Fetcher] Error al descargar imagen: " . $tmp->get_error_message());
@@ -385,7 +380,7 @@ function anf_import_remote_image($image_url, $post_id) {
         return false;
     }
     
-    // Generar nombre único para evitar conflictos
+    // Generar nombre único para evitar conflictos:
     $filename = 'auto-news-' . $post_id . '-' . time() . '.' . $extension;
     
     $file_array = [
@@ -393,7 +388,7 @@ function anf_import_remote_image($image_url, $post_id) {
         'tmp_name' => $tmp
     ];
     
-    // Subir a biblioteca de medios
+    // Subir a biblioteca de medios:
     $attachment_id = media_handle_sideload($file_array, $post_id);
     
     if (is_wp_error($attachment_id)) {
@@ -411,12 +406,12 @@ function anf_import_remote_image($image_url, $post_id) {
         error_log("[Auto News Fetcher] DEBUG: media_handle_sideload retornó ID inválido o 0 para URL: " . $image_url);
         return false;
     }    
-    /***********FIN DE: LOG VERIFICA SI NO HAY ERRORES AL BAJAR IMAGENE *******/    
+    /***********FIN DE: LOG VERIFICA SI NO HAY ERRORES AL BAJAR IMAGENES *******/    
     
-    // Asignar como imagen destacada
+    // Asignar como imagen destacada:
     set_post_thumbnail($post_id, $attachment_id);
     
-    // Guardar URL original en meta para referencia
+    // Guardar URL original en meta para referencia:
     update_post_meta($post_id, 'anf_original_image_url', $image_url);
     
     
@@ -703,8 +698,8 @@ function anf_execute_auto_fetch() {
     return $imported_count;
 }
 
-
-/***************PUNTO 6.3.********************************************/
+/*********ESTA FUNCION DE NOTIFICACIONES NO LA VAMOS A IMPLEMENTAR TODAVIA*********
+//***************PUNTO 6.3.********************************************
 
 // Función para enviar el email
 function anf_send_notification($imported_count, $errors = []) {
@@ -732,7 +727,7 @@ function anf_send_notification($imported_count, $errors = []) {
     
     wp_mail($to, $subject, $message, $headers);
 }
-/*********ESTA FUNCION DE NOTIFICACIONES NO LA VAMOS A IMPLEMENTAR TODAVIA*********
+
 // Modificar la función de fetch automático para incluir notificación
 function anf_execute_auto_fetch() {
     $options = get_option('anf_settings');
@@ -774,12 +769,3 @@ function anf_fetch_and_save_articles() {
 }
 
 *************************************************************************************/
-/*
-// Agregar al final de tu archivo, temporalmente
-add_action('wp_ajax_test_feed_images', function() {
-    $feed_url = 'https://feeds.as.com/mrss-s/pages/as/site/as.com/section/futbol/subsection/primera/';
-    $debug = anf_debug_feed_images($feed_url);
-    wp_die('<pre>' . print_r($debug, true) . '</pre>');
-});
- * 
- */
