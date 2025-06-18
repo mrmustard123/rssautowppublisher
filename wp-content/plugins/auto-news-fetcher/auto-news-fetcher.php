@@ -13,8 +13,8 @@ Email: leonardo616@gmail.com
  * Version: 1.0
  * Author: Leonardo Tellez
  */
-
-if (!defined('ABSPATH')) exit; // Seguridad básica
+// Seguridad básica
+if (!defined('ABSPATH')) exit; 
 /** CODIGO SOLO PARA INICIALIZAR LA PRIMERA VEZ.**
 // Hook para inicializar el plugin
 add_action('init', 'anf_initialize_plugin');
@@ -162,22 +162,55 @@ function anf_render_settings_page() {
 
 // --- Función para buscar artículos desde los feeds configurados ---
 function anf_fetch_and_save_articles() {
+    xdebug_break();
     $options = get_option('anf_settings', []);
+    /***COMENTADO TEMPORALMENTE*****
     $feeds = array_filter(array_map('trim', explode("\n", $options['feeds'] ?? '')));
+    *****************************/
     $include_keywords = array_filter(array_map('trim', explode(',', $options['include_keywords'] ?? '')));
     $exclude_keywords = array_filter(array_map('trim', explode(',', $options['exclude_keywords'] ?? '')));
 
+    /* COMENTADO TEMPORALMENTE
     if (empty($feeds)) {
         error_log("[Auto News Fetcher] No hay feeds configurados.");
         echo '<div class="notice notice-error"><p>Error: No hay feeds RSS configurados.</p></div>';
         return;
-    }
+    }     
+     */
 
     require_once(ABSPATH . WPINC . '/feed.php'); // Cargar la librería de feeds de WP
 
     $imported_count = 0;
     $errors = [];
+    
+ // **** INICIO DEL CÓDIGO TEMPORAL PARA PRUEBAS ****
+    // Comenta el bucle 'foreach ($feeds as $feed_url)' existente y añade este bloque
+    $feed_url_to_test = 'https://www.elnacional.com/feed/'; // <--- ¡AQUÍ ES DONDE ESPECIFICAS EL FEED!
+    $max_items_to_test = 1; // <--- Procesar solo el artículo más reciente para pruebas
 
+    try {
+        $feed = fetch_feed($feed_url_to_test); // Usa el sistema de caché de WordPress
+
+        if (is_wp_error($feed)) {
+            throw new Exception($feed->get_error_message());
+        }
+
+        $items = $feed->get_items(0, $max_items_to_test); // Primeros 1 (o más si cambias $max_items_to_test) artículos
+        foreach ($items as $item) {
+            if (anf_should_import_item($item, $include_keywords, $exclude_keywords)) {
+                if (anf_save_news_item($item)) {
+                    $imported_count++;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        $errors[] = "Feed: $feed_url_to_test - Error: " . $e->getMessage();
+        error_log("[Auto News Fetcher] " . $e->getMessage());
+    }
+    // **** FIN DEL CÓDIGO TEMPORAL PARA PRUEBAS ****    
+
+/*    
+    
     foreach ($feeds as $feed_url) {
         try {
             $feed = fetch_feed($feed_url); // Usa el sistema de caché de WordPress
@@ -199,7 +232,7 @@ function anf_fetch_and_save_articles() {
             error_log("[Auto News Fetcher] " . $e->getMessage());
         }
     }
-
+*/
     // Mostrar resultados
     if (!empty($errors)) {
         echo '<div class="notice notice-warning"><p>Ocurrieron errores: ' . implode('<br>', $errors) . '</p></div>';
@@ -229,6 +262,7 @@ function anf_save_news_item($item) {
     $description = $item->get_description();
     $permalink = $item->get_permalink();
 
+/*****LO DESHABILITAMOS TEMPORALMENTE*****    
     // Verificar duplicados (tu código existente)
     $existing_post = new WP_Query([
         'post_type' => 'auto_news',
@@ -239,8 +273,9 @@ function anf_save_news_item($item) {
     if ($existing_post->have_posts() || anf_post_exists_by_guid($guid)) {
         return false;
     }
-
+*********************************************************/
     // Extraer imagen usando la función mejorada
+    xdebug_break();
     $image_url = anf_extract_image_from_item($item);
     
     // Crear el post
@@ -367,11 +402,24 @@ function anf_import_remote_image($image_url, $post_id) {
         return false;
     }
     
+    /***********LOG VERIFICA SI NO HAY ERRORES AL BAJAR IMAGENES*******/    
+    if ($attachment_id) { // Asegurarse de que el ID no sea 0 o false
+        set_post_thumbnail($post_id, $attachment_id);
+        error_log("[Auto News Fetcher] DEBUG: Imagen destacada asignada. Post ID: $post_id, Adjunto ID: $attachment_id");
+        // ...
+    } else {
+        error_log("[Auto News Fetcher] DEBUG: media_handle_sideload retornó ID inválido o 0 para URL: " . $image_url);
+        return false;
+    }    
+    /***********FIN DE: LOG VERIFICA SI NO HAY ERRORES AL BAJAR IMAGENE *******/    
+    
     // Asignar como imagen destacada
     set_post_thumbnail($post_id, $attachment_id);
     
     // Guardar URL original en meta para referencia
     update_post_meta($post_id, 'anf_original_image_url', $image_url);
+    
+    
     
     error_log("[Auto News Fetcher] Imagen importada exitosamente: $image_url -> Attachment ID: $attachment_id");
     
@@ -380,71 +428,98 @@ function anf_import_remote_image($image_url, $post_id) {
 
 
 function anf_extract_image_from_item($item) {
+    xdebug_break();  //THIS IS IMPORTANT FOR USING XDEBUG INSIDE WORDPRESS!
     $image_url = '';
+    error_log("[Auto News Fetcher - DEBUG] Procesando item: " . $item->get_title());
+
+    // Obtener todo el contenido posible
+    $description = $item->get_description();
+    $content = $item->get_content(); // Esto capturará el <content:encoded>
     
-    // Método 1: Buscar en media:content o media:thumbnail
-    $raw_data = $item->get_item_tags('', 'description');
-    if ($raw_data && isset($raw_data[0]['data'])) {
-        $content = $raw_data[0]['data'];
-        
-        // Buscar media:content
-        if (preg_match('/media:content[^>]+url=[\'"]([^\'"]+)[\'"]/', $content, $matches)) {
-            $image_url = $matches[1];
-        }
-        // Buscar media:thumbnail
-        elseif (preg_match('/media:thumbnail[^>]+url=[\'"]([^\'"]+)[\'"]/', $content, $matches)) {
-            $image_url = $matches[1];
-        }
-    }
+    // Priorizamos content:encoded si existe y no está vacío.
+    // Si content:encoded tiene la imagen principal, usaremos solo eso para evitar la descripción corta.
+    $full_content = !empty($content) ? $content : $description; 
     
-    // Método 2: Enclosure tradicional
-    if (empty($image_url) && $item->get_enclosure()) {
-        $enclosure = $item->get_enclosure();
-        if ($enclosure->get_type() && strpos($enclosure->get_type(), 'image/') === 0) {
-            $image_url = $enclosure->get_link();
-        }
-    }
-    
-    // Método 3: Buscar primera imagen en el contenido HTML
-    if (empty($image_url)) {
-        $description = $item->get_description();
-        $content = $item->get_content();
-        $full_content = $description . ' ' . $content;
-        
-        // Regex más robusta para encontrar imágenes
-        if (preg_match('/<img[^>]+src=[\'"]([^\'"]+)[\'"][^>]*>/i', $full_content, $matches)) {
-            $image_url = $matches[1];
-        }
-    }
-    
-    // Método 4: Buscar en campos específicos del RSS
-    if (empty($image_url)) {
-        // Algunos feeds usan 'image' como campo
-        $image_field = $item->get_item_tags('', 'image');
-        if ($image_field && isset($image_field[0]['data'])) {
-            $image_url = $image_field[0]['data'];
-        }
-    }
-    
-    // Limpiar y validar URL
+    error_log("[Auto News Fetcher - DEBUG] Contenido para regex (primeros 500 chars): " . substr($full_content, 0, 500));
+
+    // --- PRIORIDAD 1: media:content o media:thumbnail (ya lo tienes, déjalo) ---
+    // Este código debe estar aquí antes del procesamiento HTML.
+    // ... tu código existente para Método 1 y Método 2 (Enclosure)
     if (!empty($image_url)) {
-        $image_url = trim($image_url);
-        // Convertir URLs relativas a absolutas si es necesario
-        if (strpos($image_url, 'http') !== 0) {
-            $feed_url = $item->get_feed()->get_permalink();
-            $parsed_feed = parse_url($feed_url);
-            $base_url = $parsed_feed['scheme'] . '://' . $parsed_feed['host'];
-            $image_url = $base_url . '/' . ltrim($image_url, '/');
-        }
-        
-        // Validar que sea una URL válida
-        if (!filter_var($image_url, FILTER_VALIDATE_URL)) {
-            $image_url = '';
-        }
+        error_log("[Auto News Fetcher - DEBUG] Encontrada via Media o Enclosure: " . $image_url);
+        return anf_validate_and_clean_image_url($image_url, $item->get_feed()->get_permalink());
+    }
+
+    // --- PRIORIDAD 2: Buscar en el HTML completo ($full_content) ---
+    // Estrategia: Buscar primero las ubicaciones de la imagen principal.
+
+    // Intento A: Buscar la imagen dentro de <noscript> (como en el caso de El Nacional)
+    // Usamos 'full_content' que ahora prioriza content:encoded
+    if (empty($image_url) && preg_match('/<noscript>\s*<img[^>]+src=[\'"]([^\'"]+)[\'"][^>]*>\s*<\/noscript>/i', $full_content, $matches)) {
+        $image_url = $matches[1];
+        error_log("[Auto News Fetcher - DEBUG] Intentando extraer de NOSCRIPT. Resultado: " . (!empty($image_url) ? "OK - " . $image_url : "FALLIDO"));
     }
     
-    return $image_url;
+    // Intento B: Si no se encontró en <noscript>, buscar img con data-cfsrc (otra variante de la principal)
+    // Esto es útil si la imagen principal usa data-cfsrc y no está en noscript o si SimplePie limpia el noscript.
+    if (empty($image_url) && preg_match('/<img[^>]+data-cfsrc=[\'"]([^\'"]+)[\'"][^>]*>/i', $full_content, $matches)) {
+        $image_url = $matches[1];
+        error_log("[Auto News Fetcher - DEBUG] Intentando extraer de DATA-CFSRC. Resultado: " . (!empty($image_url) ? "OK - " . $image_url : "FALLIDO"));
+    }
+
+    // Intento C: Si las anteriores fallaron, buscar la primera img con src (tu regex original)
+    // Esto es el último recurso para HTML.
+    if (empty($image_url) && preg_match('/<img[^>]+src=[\'"]([^\'"]+)[\'"][^>]*>/i', $full_content, $matches)) {
+        $image_url = $matches[1];
+        error_log("[Auto News Fetcher - DEBUG] Intentando extraer de IMG SRC (fallback). Resultado: " . (!empty($image_url) ? "OK - " . $image_url : "FALLIDO"));
+    }
+
+    // --- PRIORIDAD 3: Otros campos RSS (ya lo tienes, déjalo) ---
+    // ... tu código existente para Método 4 (si tienes otros campos RSS específicos)
+
+    // Validar y limpiar URL al final
+    return anf_validate_and_clean_image_url($image_url, $item->get_feed()->get_permalink());
 }
+
+
+// Nueva función auxiliar para limpieza y validación, para no repetir código
+function anf_validate_and_clean_image_url($url, $feed_permalink) {
+    if (empty($url)) {
+        error_log("[Auto News Fetcher - DEBUG] No se encontró URL de imagen después de todos los métodos.");
+        return '';
+    }
+
+    $url = trim($url);
+    // Convertir URLs relativas a absolutas si es necesario
+    if (strpos($url, 'http') !== 0) {
+        $parsed_feed = parse_url($feed_permalink);
+        // Construir la base URL de manera más robusta
+        $base_url = (isset($parsed_feed['scheme']) ? $parsed_feed['scheme'] . '://' : '') . 
+                    (isset($parsed_feed['host']) ? $parsed_feed['host'] : '');
+        
+        // Manejar rutas relativas que empiezan con / (desde la raíz del dominio)
+        if (strpos($url, '/') === 0) {
+            $url = $base_url . $url;
+        } else { // Rutas relativas a la carpeta actual del feed
+            $path = isset($parsed_feed['path']) ? dirname($parsed_feed['path']) : '';
+            if ($path && $path !== '/') {
+                $url = $base_url . $path . '/' . $url;
+            } else {
+                $url = $base_url . '/' . $url;
+            }
+        }
+        error_log("[Auto News Fetcher - DEBUG] URL relativa convertida a absoluta: " . $url);
+    }
+    
+    // Validar que sea una URL válida
+    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        error_log("[Auto News Fetcher - DEBUG] URL después de procesamiento NO válida: " . $url);
+        return '';
+    }
+    error_log("[Auto News Fetcher - DEBUG] URL después de procesamiento VÁLIDA: " . $url);
+    return $url;
+}
+
 
 
 
@@ -559,7 +634,7 @@ add_shortcode('mostrar_noticias_automaticas', function($atts) {
     
     $args = [
         'post_type'      => 'auto_news',
-        'posts_per_page' => 5,
+        'posts_per_page' => 30,
         'post_status'    => 'publish'
     ];
     
